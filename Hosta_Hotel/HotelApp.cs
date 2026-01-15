@@ -491,7 +491,7 @@ public class HotelApp : IHostedService
                     case "2":
                         Console.Write("Nr Camera: "); int nr = int.Parse(Console.ReadLine());
                         _hotel.CleanRoom(nr);
-                        Console.WriteLine("Camera marcata Free.");
+                        Console.WriteLine("Camera marcata Free,");
                         Console.ReadKey();
                         break;
                     case "3":

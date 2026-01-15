@@ -402,7 +402,7 @@ public class Hotel
             UsernameID = username, Password = password 
         });
         SaveChanges();
-        _logger.LogInformation($"Register Client Nou: {username} (Age: {age})");
+        _logger.LogInformation($"Register Client Nou: {username} (Age: {age}).");
     }
 
     private void SaveChanges()
