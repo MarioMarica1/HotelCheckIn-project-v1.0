@@ -3,7 +3,6 @@ using Hosta_Hotel.Entities;
 
 namespace Hosta_Hotel.Infrastructure;
 
-// Această clasă funcționează ca un container pentru toate datele hotelului
 public class HotelDataWrapper
 {
     public List<Room> Rooms { get; set; } = new();

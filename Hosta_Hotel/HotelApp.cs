@@ -447,7 +447,7 @@ public class HotelApp : IHostedService
                         {
                             _hotel.DeleteSelfAccount(client.UsernameID);
                             Console.WriteLine("Contul a fost sters. La revedere.");
-                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.ForegroundColor = ConsoleColor.Yellow;
                             Console.WriteLine("Ai fost cel mai bun , see you on the other side. o7");
                             Console.ResetColor();
                             Console.ReadKey();
