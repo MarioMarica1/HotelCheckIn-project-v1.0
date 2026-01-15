@@ -15,4 +15,30 @@
       <PackageReference Include="System.Text.Json" Version="10.0.1" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Content Include="obj\ConsoleApp1.csproj.nuget.dgspec.json" />
+      <Content Include="obj\ConsoleApp1.csproj.nuget.g.props" />
+      <Content Include="obj\ConsoleApp1.csproj.nuget.g.targets" />
+      <Content Include="obj\Debug\net8.0\ConsoleApp1.AssemblyInfoInputs.cache" />
+      <Content Include="obj\Debug\net8.0\ConsoleApp1.assets.cache" />
+      <Content Include="obj\Debug\net8.0\ConsoleApp1.GeneratedMSBuildEditorConfig.editorconfig" />
+      <Content Include="obj\Debug\net8.0\Hosta_Ho.A7AE3C7F.Up2Date" />
+      <Content Include="obj\Debug\net8.0\Hosta_Hotel.assets.cache" />
+      <Content Include="obj\Debug\net8.0\Hosta_Hotel.csproj.CoreCompileInputs.cache" />
+      <Content Include="obj\Debug\net8.0\Hosta_Hotel.csproj.FileListAbsolute.txt" />
+      <Content Include="obj\Debug\net8.0\Hosta_Hotel.dll" />
+      <Content Include="obj\Debug\net8.0\Hosta_Hotel.pdb" />
+      <Content Include="obj\Hosta_Hotel.csproj.nuget.dgspec.json" />
+      <Content Include="obj\project.assets.json" />
+      <Content Include="obj\project.nuget.cache" />
+      <Content Include="obj\project.packagespec.json" />
+      <Content Include="obj\rider.project.model.nuget.info" />
+      <Content Include="obj\rider.project.restore.info" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Include="obj\Debug\net8.0\ConsoleApp1.AssemblyInfo.cs" />
+      <Compile Include="obj\Debug\net8.0\ConsoleApp1.GlobalUsings.g.cs" />
+    </ItemGroup>
+
 </Project>

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Hosta_Hotel.TheBrain;
 using Hosta_Hotel.Entities;
+using System.Globalization;
 
 namespace Hosta_Hotel;
 
@@ -33,7 +34,7 @@ public class HotelApp : IHostedService
         {
             ShowHeader("MAIN MENU");
             Console.WriteLine("1. Login");
-            Console.WriteLine("2. Register (Client nou)");
+            Console.WriteLine("2. Register");
             Console.WriteLine("3. Change Hotel Date (Simulare)");
             Console.WriteLine("4. Exit");
             Console.Write("Selectati o optiune: ");
@@ -60,9 +61,9 @@ public class HotelApp : IHostedService
     {
         Console.Clear();
         Console.WriteLine("=== CONFIGURARE DATA HOTEL ===");
-        Console.WriteLine($"Data curenta a hotelului: {_hotel.CurrentDate:yyyy-MM-dd}");
-        Console.WriteLine("Apasati ENTER pentru a pastra data de azi SAU introduceti o noua data (yyyy-mm-dd):");
-        
+        Console.WriteLine($"Data curenta a hotelului: {_hotel.CurrentDate:dd-MM-yyyy}");
+        Console.WriteLine("Apasati ENTER pentru a pastra data de azi SAU introduceti o noua data (dd-mm-yyyy):");
+
         string input = Console.ReadLine();
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -70,15 +71,17 @@ public class HotelApp : IHostedService
         }
         else
         {
-            if (DateTime.TryParse(input, out DateTime newDate))
+            if (DateTime.TryParseExact(
+                    input,
+                    "dd-MM-yyyy",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out DateTime newDate))
             {
-                // --- VALIDARE TIMP (Sanity Check) ---
-                // Nu acceptam ani din trecutul indepartat sau viitorul absurd
                 if (newDate.Year < 2020 || newDate.Year > 2050)
                 {
                     PrintErrorMessage("Anul introdus este invalid (Trebuie sa fie intre 2020 si 2050).");
-                    // Ramanem la data veche sau setam azi
-                    return; 
+                    return;
                 }
 
                 _hotel.SetSimulationDate(newDate);
@@ -99,7 +102,7 @@ public class HotelApp : IHostedService
         Console.WriteLine("========================================");
         Console.WriteLine($"      HOSTA HOTEL - {menuName}");
         Console.WriteLine("========================================");
-        Console.WriteLine($"[DATE]: {_hotel.CurrentDate:yyyy-MM-dd} (Simulat)");
+        Console.WriteLine($"[DATE]: {_hotel.CurrentDate:dd-MM-yyyy} (Simulat)");
         Console.WriteLine($"[TIME]: {DateTime.Now:HH:mm} (Real)");
         Console.WriteLine("----------------------------------------");
     }
@@ -109,14 +112,33 @@ public class HotelApp : IHostedService
     private void HandleRegister()
     {
         ShowHeader("INREGISTRARE");
-        Console.Write("Prenume: "); string first = Console.ReadLine();
-        Console.Write("Nume: "); string last = Console.ReadLine();
-        Console.Write("Varsta: "); int age = int.Parse(Console.ReadLine());
-        Console.Write("Username: "); string user = Console.ReadLine();
-        Console.Write("Parola: "); string pass = Console.ReadLine();
+        try 
+        {
+            Console.Write("Prenume: "); string first = Console.ReadLine();
+            Console.Write("Nume: "); string last = Console.ReadLine();
+            
+            // [MODIFICARE] Cerinta explicita 18+
+            Console.Write("Varsta (18+): "); 
+            int age = int.Parse(Console.ReadLine());
 
-        _hotel.RegisterClient(first, last, age, user, pass);
-        Console.WriteLine("Succes! Apasati o tasta.");
+            Console.Write("Username: "); string user = Console.ReadLine();
+            Console.Write("Parola: "); string pass = Console.ReadLine();
+
+            // Metoda din Hotel va arunca exceptie daca age < 18
+            _hotel.RegisterClient(first, last, age, user, pass);
+            
+            Console.WriteLine("Succes! Cont creat. Apasati o tasta.");
+        }
+        catch (FormatException)
+        {
+            PrintErrorMessage("Formatul introdus (de ex. la varsta) nu este valid.");
+            return;
+        }
+        catch (Exception ex)
+        {
+            PrintErrorMessage(ex.Message);
+            return;
+        }
         Console.ReadKey();
     }
 
@@ -156,7 +178,8 @@ public class HotelApp : IHostedService
             Console.WriteLine("3. Configurare Reguli (CheckIn/Out Time)");
             Console.WriteLine("4. Vezi Rezervari Client");
             Console.WriteLine("5. Modifica o Rezervare");
-            Console.WriteLine("6. Logout");
+            Console.WriteLine("6. Sterge Cont Client");
+            Console.WriteLine("7. Logout");
             Console.Write("Optiune: ");
 
             try
@@ -179,13 +202,28 @@ public class HotelApp : IHostedService
                         Console.Write("Username Client: ");
                         string cUser = Console.ReadLine();
                         var resList = _hotel.GetClientReservations(cUser);
-                        if(resList.Count == 0) Console.WriteLine("Nicio rezervare gasita.");
-                        foreach(var r in resList) 
-                            Console.WriteLine($"Camera {r.RoomNumber} | {r.StartDate:d}-{r.EndDate:d} | CheckIn: {r.IsCheckedIn} | Out: {r.IsCheckedOut}");
+                        if (resList.Count == 0) Console.WriteLine("Nicio rezervare gasita.");
+                        foreach (var r in resList)
+                            Console.WriteLine($"Camera {r.RoomNumber} | {r.StartDate:dd-MM-yyyy}-{r.EndDate:dd-MM-yyyy} | CheckIn: {r.IsCheckedIn} | Out: {r.IsCheckedOut}");
                         Console.ReadKey();
                         break;
                     case "5": ManageReservationFlow(); break;
-                    case "6": back = true; break;
+                    
+                    // [MODIFICARE] Optiunea de stergere client
+                    case "6":
+                        Console.Write("Introdu Username-ul clientului de sters: ");
+                        string targetUser = Console.ReadLine();
+                        Console.WriteLine($"ATENTIE: Se vor sterge si rezervarile istorice pentru '{targetUser}'. Continuati? (da/nu)");
+                        if(Console.ReadLine().ToLower() == "da")
+                        {
+                            _hotel.AdminDeleteClient(targetUser);
+                            Console.WriteLine("Client sters cu succes.");
+                        }
+                        else Console.WriteLine("Anulat.");
+                        Console.ReadKey();
+                        break;
+
+                    case "7": back = true; break;
                 }
             }
             catch (Exception ex) { PrintErrorMessage(ex.Message); }
@@ -200,10 +238,10 @@ public class HotelApp : IHostedService
         Console.WriteLine("3. Schimba Status");
         Console.WriteLine("4. Vezi Lista");
         string opt = Console.ReadLine();
-        
-        if (opt == "1") {
+
+        if (opt == "1")
+        {
             Console.Write("Nr Camera: "); int nr = int.Parse(Console.ReadLine());
-            
             Console.WriteLine("Tip Camera: 1. Single | 2. Double | 3. Suite");
             string typeOpt = Console.ReadLine();
             string type = "Single";
@@ -215,20 +253,23 @@ public class HotelApp : IHostedService
             Console.WriteLine($"Camera {nr} ({type}) adaugata.");
             Console.ReadKey();
         }
-        else if (opt == "2") {
+        else if (opt == "2")
+        {
             Console.Write("Nr Camera: "); int nr = int.Parse(Console.ReadLine());
             _hotel.RemoveRoom(nr);
             Console.WriteLine("Stearsa.");
             Console.ReadKey();
         }
-        else if (opt == "3") {
+        else if (opt == "3")
+        {
             Console.Write("Nr Camera: "); int nr = int.Parse(Console.ReadLine());
             Console.WriteLine("Statusuri: Free, Occupied, Cleaning, Indisponible");
             Console.Write("Nou Status: "); string st = Console.ReadLine();
             _hotel.SetRoomStatus(nr, st);
         }
-        else if (opt == "4") {
-            foreach(var r in _hotel.Rooms) 
+        else if (opt == "4")
+        {
+            foreach (var r in _hotel.Rooms)
                 Console.WriteLine($"{r.RoomNumber} - {r.RoomType} - {r.Status} - {r.PricePerNight} RON");
             Console.ReadKey();
         }
@@ -240,7 +281,8 @@ public class HotelApp : IHostedService
         Console.WriteLine("1. Angajeaza | 2. Concediaza | 3. Lista");
         string opt = Console.ReadLine();
 
-        if (opt == "1") {
+        if (opt == "1")
+        {
             Console.Write("User: "); string u = Console.ReadLine();
             Console.Write("Pass: "); string p = Console.ReadLine();
             Console.Write("Nume: "); string n = Console.ReadLine();
@@ -248,13 +290,16 @@ public class HotelApp : IHostedService
             _hotel.AddCleaner(n, pn, u, p);
             Console.ReadKey();
         }
-        else if (opt == "2") {
+        else if (opt == "2")
+        {
             Console.Write("Username cleaner: "); string u = Console.ReadLine();
             _hotel.RemoveCleaner(u);
             Console.ReadKey();
         }
-        else if (opt == "3") {
-            foreach(var c in _hotel.Cleaners) Console.WriteLine($"{c.FirstName} {c.LastName} ({c.UsernameID})");
+        else if (opt == "3")
+        {
+            foreach (var c in _hotel.Cleaners)
+                Console.WriteLine($"{c.FirstName} {c.LastName} ({c.UsernameID})");
             Console.ReadKey();
         }
     }
@@ -267,17 +312,24 @@ public class HotelApp : IHostedService
         Console.WriteLine("Actiune: 1. Anuleaza | 2. Schimba Perioada | 3. Forteaza CheckIn");
         string act = Console.ReadLine();
 
-        if (act == "1") {
+        if (act == "1")
+        {
             _hotel.AdminCancelReservation(user, nr);
             Console.WriteLine("Anulata.");
         }
-        else if (act == "2") {
-            Console.Write("Data Start (yyyy-mm-dd): "); DateTime start = DateTime.Parse(Console.ReadLine());
-            Console.Write("Data End (yyyy-mm-dd): "); DateTime end = DateTime.Parse(Console.ReadLine());
+        else if (act == "2")
+        {
+            Console.Write("Data Start (dd-mm-yyyy): ");
+            DateTime start = DateTime.ParseExact(Console.ReadLine(), "dd-MM-yyyy", CultureInfo.InvariantCulture);
+
+            Console.Write("Data End (dd-mm-yyyy): ");
+            DateTime end = DateTime.ParseExact(Console.ReadLine(), "dd-MM-yyyy", CultureInfo.InvariantCulture);
+
             _hotel.AdminChangeReservationPeriod(user, nr, start, end);
             Console.WriteLine("Perioada modificata.");
         }
-        else if (act == "3") {
+        else if (act == "3")
+        {
             _hotel.AdminForceCheckIn(user, nr);
             Console.WriteLine("Check-in fortat executat.");
         }
@@ -299,6 +351,7 @@ public class HotelApp : IHostedService
             Console.WriteLine("5. Istoric / Rezervarile mele");
             Console.WriteLine("6. Anuleaza o Rezervare");
             Console.WriteLine("7. Logout");
+            Console.WriteLine("8. Sterge contul meu");
             Console.Write("Optiune: ");
 
             try
@@ -308,32 +361,34 @@ public class HotelApp : IHostedService
                     case "1":
                         var free = _hotel.Rooms.Where(r => r.Status == "Free").ToList();
                         Console.WriteLine("Disponibile:");
-                        foreach(var r in free) Console.WriteLine($"{r.RoomNumber} ({r.RoomType}) - {r.PricePerNight} RON");
+                        foreach (var r in free)
+                            Console.WriteLine($"{r.RoomNumber} ({r.RoomType}) - {r.PricePerNight} RON");
                         Console.ReadKey();
                         break;
-                    
+
                     case "2":
                         Console.Write("Nr Camera: "); int nr = int.Parse(Console.ReadLine());
-                        Console.Write("Data Start (yyyy-mm-dd): "); DateTime start = DateTime.Parse(Console.ReadLine());
+                        Console.Write("Data Start (dd-mm-yyyy): ");
+                        DateTime start = DateTime.ParseExact(Console.ReadLine(), "dd-MM-yyyy", CultureInfo.InvariantCulture);
                         Console.Write("Numar Zile: "); int days = int.Parse(Console.ReadLine());
-                        
+
                         _hotel.MakeReservation(client.UsernameID, nr, start, days);
                         Console.WriteLine("Rezervare reusita!");
                         Console.ReadKey();
                         break;
-                    
+
                     case "3":
                         Console.WriteLine("--- REZERVARI PENTRU CHECK-IN ---");
                         var listCheckIn = _hotel.GetReservationsForCheckIn(client.UsernameID);
-                        if (listCheckIn.Count == 0) 
+                        if (listCheckIn.Count == 0)
                         {
                             Console.WriteLine("Nu aveti rezervari valide pentru check-in azi.");
                         }
-                        else 
+                        else
                         {
-                            foreach(var r in listCheckIn)
-                                Console.WriteLine($"Camera {r.RoomNumber} | Start: {r.StartDate:d}");
-                            
+                            foreach (var r in listCheckIn)
+                                Console.WriteLine($"Camera {r.RoomNumber} | Start: {r.StartDate:dd-MM-yyyy}");
+
                             Console.Write("Introdu Nr Camera pentru Check-In: ");
                             int nrCI = int.Parse(Console.ReadLine());
                             _hotel.SelfCheckIn(client.UsernameID, nrCI);
@@ -341,7 +396,7 @@ public class HotelApp : IHostedService
                         }
                         Console.ReadKey();
                         break;
-                    
+
                     case "4":
                         Console.WriteLine("--- CAMERE OCUPATE (CHECK-OUT) ---");
                         var listCheckOut = _hotel.GetReservationsForCheckOut(client.UsernameID);
@@ -351,9 +406,9 @@ public class HotelApp : IHostedService
                         }
                         else
                         {
-                            foreach(var r in listCheckOut)
-                                Console.WriteLine($"Camera {r.RoomNumber} | End: {r.EndDate:d}");
-                            
+                            foreach (var r in listCheckOut)
+                                Console.WriteLine($"Camera {r.RoomNumber} | End: {r.EndDate:dd-MM-yyyy}");
+
                             Console.Write("Introdu Nr Camera pentru Check-Out: ");
                             int nrCO = int.Parse(Console.ReadLine());
                             _hotel.SelfCheckOut(client.UsernameID, nrCO);
@@ -364,8 +419,8 @@ public class HotelApp : IHostedService
 
                     case "5":
                         var history = _hotel.GetClientReservations(client.UsernameID);
-                        foreach(var h in history)
-                            Console.WriteLine($"Camera {h.RoomNumber} | {h.StartDate:d}-{h.EndDate:d} | In: {h.IsCheckedIn} | Out: {h.IsCheckedOut}");
+                        foreach (var h in history)
+                            Console.WriteLine($"Camera {h.RoomNumber} | {h.StartDate:dd-MM-yyyy}-{h.EndDate:dd-MM-yyyy} | In: {h.IsCheckedIn} | Out: {h.IsCheckedOut}");
                         Console.ReadKey();
                         break;
 
@@ -378,6 +433,31 @@ public class HotelApp : IHostedService
 
                     case "7":
                         back = true;
+                        break;
+
+                    // [MODIFICARE] Logica de stergere cont propriu
+                    case "8":
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("AVERTISMENT: Aceasta actiune este ireversibila! - Please reconsider ;-;");
+                        Console.ResetColor();
+                        Console.WriteLine("Scrie 'STERGE' pentru a confirma stergerea contului tau:");
+                        
+                        string confirm = Console.ReadLine();
+                        if (confirm == "STERGE")
+                        {
+                            _hotel.DeleteSelfAccount(client.UsernameID);
+                            Console.WriteLine("Contul a fost sters. La revedere.");
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine("Ai fost cel mai bun , see you on the other side. o7");
+                            Console.ResetColor();
+                            Console.ReadKey();
+                            back = true; // Fortam iesirea din meniul de client
+                        }
+                        else
+                        {
+                            Console.WriteLine("Nu s-a confirmat. Contul ramane activ.");
+                            Console.ReadKey();
+                        }
                         break;
                 }
             }
@@ -405,7 +485,7 @@ public class HotelApp : IHostedService
                     case "1":
                         var dirty = _hotel.GetDirtyRooms();
                         if (!dirty.Any()) Console.WriteLine("Totul e curat.");
-                        foreach(var r in dirty) Console.WriteLine($"Camera {r.RoomNumber}");
+                        foreach (var r in dirty) Console.WriteLine($"Camera {r.RoomNumber}");
                         Console.ReadKey();
                         break;
                     case "2":

@@ -17,20 +17,20 @@ public class Hotel
     public TimeSpan CheckInStart { get; private set; }
     public TimeSpan CheckOutLimit { get; private set; }
     
-    // DATA SIMULATĂ A HOTELULUI (Controlată de noi la intrarea în aplicație)
+    // DATA SIMULATĂ A HOTELULUI
     public DateTime CurrentDate { get; private set; }
 
     // Dependențe
     private readonly ILogger<Hotel> _logger;
     private readonly PersistenceManager _persistence;
-
+    
     public Hotel(ILogger<Hotel> logger, PersistenceManager persistence)
     {
         _logger = logger;
         _persistence = persistence;
 
         var data = _persistence.LoadData();
-        Rooms = data.Rooms ?? new List<Room>(); // daca nu este Lista , atunci creeam una.
+        Rooms = data.Rooms ?? new List<Room>(); 
         Clients = data.Clients ?? new List<Client>();
         Admins = data.Admins ?? new List<Administrator>();
         Cleaners = data.Cleaners ?? new List<Cleaner>();
@@ -39,16 +39,15 @@ public class Hotel
         CheckInStart = data.CheckInStart == default ? new TimeSpan(14, 0, 0) : data.CheckInStart;
         CheckOutLimit = data.CheckOutLimit == default ? new TimeSpan(11, 0, 0) : data.CheckOutLimit;
 
-        // Setăm data implicită ca fiind Azi, dar va fi suprascrisă din UI
+        // Setăm data implicită ca fiind Azi
         CurrentDate = DateTime.Now.Date;
-
         EnsureSeedData();
     }
 
     // --- GESTIONARE TIMP SIMULAT ---
     public void SetSimulationDate(DateTime date)
     {
-        CurrentDate = date.Date; // Ne interesează doar data, ora o luăm din realitate
+        CurrentDate = date.Date; 
         _logger.LogInformation($"SYSTEM: Data simulată a fost setată la {CurrentDate:yyyy-MM-dd}");
     }
 
@@ -61,7 +60,6 @@ public class Hotel
         if (Rooms.Any(r => r.RoomNumber == number))
             throw new Exception($"Camera {number} există deja.");
 
-        // Validare Tip Cameră (Aici impunem restricția cerută)
         var validTypes = new List<string> { "Single", "Double", "Suite" };
         if (!validTypes.Contains(type))
         {
@@ -69,7 +67,6 @@ public class Hotel
         }
 
         Rooms.Add(new Room { RoomNumber = number, RoomType = type, PricePerNight = price, Status = "Free" });
-        
         SaveChanges();
         _logger.LogInformation($"ADMIN: Adăugat camera {number} ({type})");
     }
@@ -130,10 +127,34 @@ public class Hotel
         _logger.LogInformation($"ADMIN: Ora limită Check-out schimbată la {newTime}");
     }
 
-    // Metode Admin Rezervări
+    // --- ADMIN: GESTIONARE CLIENȚI & REZERVĂRI ---
+
     public List<Reservation> GetClientReservations(string clientUsername)
     {
         return Reservations.Where(r => r.ClientUsername == clientUsername).ToList();
+    }
+
+    // [NOU] Admin șterge client
+    public void AdminDeleteClient(string clientUsername)
+    {
+        var client = Clients.FirstOrDefault(c => c.UsernameID == clientUsername);
+        if (client == null) throw new Exception("Clientul nu există.");
+
+        // Verificăm dacă are rezervări active (Check-in făcut sau viitoare neanulate)
+        bool hasActiveReservations = Reservations.Any(r => 
+            r.ClientUsername == clientUsername && !r.IsCheckedOut);
+
+        if (hasActiveReservations)
+        {
+            throw new Exception("Clientul are rezervări active. Anulați-le sau faceți Check-Out înainte de ștergere.");
+        }
+
+        // Ștergem și istoricul rezervărilor (Curățăm complet urmele)
+        Reservations.RemoveAll(r => r.ClientUsername == clientUsername);
+        
+        Clients.Remove(client);
+        SaveChanges();
+        _logger.LogInformation($"ADMIN: A șters contul clientului {clientUsername} și istoricul aferent.");
     }
 
     public void AdminCancelReservation(string clientUsername, int roomNumber)
@@ -182,26 +203,22 @@ public class Hotel
     }
 
     // ==========================================================
-    // 2. METODE CLIENT (Logica Actualizată cu Data Simulată)
+    // 2. METODE CLIENT
     // ==========================================================
 
     public void MakeReservation(string clientUsername, int roomNumber, DateTime start, int days)
     {
-        // Calculăm data de final pe baza zilelor
         DateTime end = start.AddDays(days);
 
-        // Validări cu CurrentDate (Timpul simulat)
-        if (start.Date < CurrentDate.Date) throw new Exception("Nu puteți face rezervări în trecut (față de data simulată a hotelului).");
+        if (start.Date < CurrentDate.Date) throw new Exception("Nu puteți face rezervări în trecut.");
         if (days < 1) throw new Exception("Trebuie să rezervați minim o noapte.");
 
         var room = Rooms.FirstOrDefault(r => r.RoomNumber == roomNumber);
         if (room == null) throw new Exception("Camera nu există.");
         
-        // Verificăm statusul curent DOAR dacă rezervarea începe Azi (Simulat)
         if (start.Date == CurrentDate.Date && room.Status != "Free") 
             throw new Exception("Camera nu este liberă astăzi.");
 
-        // Verificăm suprapunerea cu alte rezervări
         bool isOccupied = Reservations.Any(r => 
             r.RoomNumber == roomNumber &&
             !r.IsCheckedOut && 
@@ -209,7 +226,6 @@ public class Hotel
 
         if (isOccupied) throw new Exception("Camera este deja rezervată în acea perioadă.");
 
-        // Creăm rezervarea
         var res = new Reservation
         {
             ClientUsername = clientUsername,
@@ -219,7 +235,6 @@ public class Hotel
         };
         Reservations.Add(res);
 
-        // Dacă rezervarea începe exact pe data curentă simulată, ocupăm camera
         if (start.Date == CurrentDate.Date)
         {
             room.Status = "Occupied"; 
@@ -229,13 +244,8 @@ public class Hotel
         _logger.LogInformation($"CLIENT {clientUsername}: Rezervat camera {roomNumber} ({days} zile).");
     }
 
-    // Helper pentru UI: Returnează rezervările valide pentru Check-In Azi
     public List<Reservation> GetReservationsForCheckIn(string clientUsername)
     {
-        // Clientul poate face check-in doar dacă:
-        // 1. Rezervarea începe AZI (CurrentDate) sau a început deja dar nu s-a terminat.
-        // 2. Nu a făcut deja check-in.
-        // 3. Nu a făcut check-out.
         return Reservations.Where(r => 
             r.ClientUsername == clientUsername &&
             !r.IsCheckedIn &&
@@ -247,11 +257,10 @@ public class Hotel
 
     public void SelfCheckIn(string clientUsername, int roomNumber)
     {
-        // 1. Verificare Oră (Reală)
+        // Verificare Oră (Reală)
         if (DateTime.Now.TimeOfDay < CheckInStart)
             throw new Exception($"Este prea devreme. Check-in începe la {CheckInStart}. Ora actuală: {DateTime.Now:HH:mm}");
 
-        // 2. Căutăm rezervarea
         var res = Reservations.FirstOrDefault(r => 
             r.ClientUsername == clientUsername && 
             r.RoomNumber == roomNumber &&
@@ -260,11 +269,9 @@ public class Hotel
         
         if (res == null) throw new Exception("Nu aveți o rezervare validă pentru această cameră.");
 
-        // 3. Verificare Dată (Simulată)
         if (res.StartDate.Date > CurrentDate.Date)
             throw new Exception($"Rezervarea începe abia pe {res.StartDate:dd/MM/yyyy}. Azi e {CurrentDate:dd/MM/yyyy}.");
 
-        // Efectuăm Check-in
         res.IsCheckedIn = true;
         
         var room = Rooms.FirstOrDefault(r => r.RoomNumber == roomNumber);
@@ -274,7 +281,6 @@ public class Hotel
         _logger.LogInformation($"CLIENT {clientUsername}: Check-in efectuat camera {roomNumber}");
     }
 
-    // Helper pentru UI: Returnează camerele ocupate de client (pt Check-Out)
     public List<Reservation> GetReservationsForCheckOut(string clientUsername)
     {
         return Reservations.Where(r => 
@@ -286,7 +292,6 @@ public class Hotel
 
     public void SelfCheckOut(string clientUsername, int roomNumber)
     {
-        // Check-out se poate face oricând dacă ești cazat
         var res = Reservations.FirstOrDefault(r => 
             r.ClientUsername == clientUsername && 
             r.RoomNumber == roomNumber && 
@@ -298,7 +303,7 @@ public class Hotel
         res.IsCheckedOut = true; 
         
         var room = Rooms.FirstOrDefault(r => r.RoomNumber == roomNumber);
-        if (room != null) room.Status = "Cleaning"; // Devine murdară
+        if (room != null) room.Status = "Cleaning"; 
         
         SaveChanges();
         _logger.LogInformation($"CLIENT {clientUsername}: Check-out efectuat camera {roomNumber}");
@@ -313,10 +318,9 @@ public class Hotel
             if (res.IsCheckedIn) throw new Exception("Nu poți anula o rezervare după check-in.");
             if (res.StartDate.Date < CurrentDate.Date) throw new Exception("Nu poți anula o rezervare din trecut.");
 
-            res.IsCheckedOut = true; // O marcăm ca anulată
+            res.IsCheckedOut = true;
 
             var room = Rooms.FirstOrDefault(r => r.RoomNumber == roomNumber);
-            // Dacă rezervarea era chiar pentru azi și o anulăm, eliberăm camera
             if (room != null && res.StartDate.Date == CurrentDate.Date) 
                 room.Status = "Free";
 
@@ -326,6 +330,27 @@ public class Hotel
         else
         {
             throw new Exception("Nu s-a găsit rezervarea activă.");
+        }
+    }
+
+    // [NOU] Clientul își șterge propriul cont
+    public void DeleteSelfAccount(string clientUsername)
+    {
+        bool hasActiveReservations = Reservations.Any(r => 
+            r.ClientUsername == clientUsername && !r.IsCheckedOut);
+
+        if (hasActiveReservations)
+        {
+            throw new Exception("Nu vă puteți șterge contul cât timp aveți rezervări active sau sunteți cazat. Finalizați șederea mai întâi.");
+        }
+
+        var client = Clients.FirstOrDefault(c => c.UsernameID == clientUsername);
+        if (client != null)
+        {
+            Reservations.RemoveAll(r => r.ClientUsername == clientUsername);
+            Clients.Remove(client);
+            SaveChanges();
+            _logger.LogInformation($"CLIENT {clientUsername}: Cont șters definitiv la cerere.");
         }
     }
 
@@ -371,8 +396,15 @@ public class Hotel
         return null;
     }
 
+    // [MODIFICAT] Adăugat verificarea de vârstă (18+)
     public void RegisterClient(string firstName, string lastName, int age, string username, string password)
     {
+        // Regula: Doar 18+
+        if (age < 18)
+        {
+            throw new Exception($"Înregistrare respinsă. Vârsta minimă este 18 ani. (Vârsta introdusă: {age})");
+        }
+
         if (Clients.Any(c => c.UsernameID == username)) 
             throw new Exception("Username indisponibil.");
 
@@ -381,7 +413,7 @@ public class Hotel
             UsernameID = username, Password = password 
         });
         SaveChanges();
-        _logger.LogInformation($"Register Client: {username}");
+        _logger.LogInformation($"Register Client Nou: {username} (Age: {age})");
     }
 
     private void SaveChanges()
