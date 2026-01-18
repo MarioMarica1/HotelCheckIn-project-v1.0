@@ -58,6 +58,7 @@ public class PersistenceManager
                 
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine($"ATENTIE!!! Baza de date este corupta! Locatie backup: {backupPath}");
+                // Now "ex" is recognized
                 Console.WriteLine($"Eroare: {ex.Message}");
                 Console.ResetColor();
             }
